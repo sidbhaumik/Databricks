@@ -1,0 +1,106 @@
+{
+  "name": "Medallion Pipeline — Daily Run",
+  "description": "Orchestrates the full Bronze → Silver → Gold pipeline with validation.",
+  "schedule": {
+    "quartz_cron_expression": "0 30 1 * * ?",
+    "timezone_id": "UTC",
+    "pause_status": "UNPAUSED"
+  },
+  "job_clusters": [
+    {
+      "job_cluster_key": "pipeline_cluster",
+      "new_cluster": {
+        "spark_version": "14.3.x-scala2.12",
+        "node_type_id": "i3.xlarge",
+        "num_workers": 4,
+        "spark_conf": {
+          "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+          "spark.sql.catalog.spark_catalog": "org.apache.iceberg.spark.SparkSessionCatalog",
+          "spark.sql.catalog.spark_catalog.type": "hive",
+          "spark.databricks.delta.preview.enabled": "true"
+        },
+        "libraries": [
+          {
+            "maven": {
+              "coordinates": "org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.5.0"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "tasks": [
+    {
+      "task_key": "ingest_bronze",
+      "description": "Ingest Avro and Parquet files into Bronze Iceberg tables",
+      "job_cluster_key": "pipeline_cluster",
+      "notebook_task": {
+        "notebook_path": "/Workspace/Repos/<your-repo>/databricks_medallion/notebooks/01_ingest_bronze",
+        "base_parameters": {
+          "run_mode": "BATCH"
+        }
+      },
+      "timeout_seconds": 3600,
+      "max_retries": 2,
+      "retry_on_timeout": true
+    },
+    {
+      "task_key": "bronze_to_silver",
+      "description": "Cleanse and upsert Bronze records into Silver Iceberg tables",
+      "depends_on": [{ "task_key": "ingest_bronze" }],
+      "job_cluster_key": "pipeline_cluster",
+      "notebook_task": {
+        "notebook_path": "/Workspace/Repos/<your-repo>/databricks_medallion/notebooks/02_bronze_to_silver",
+        "base_parameters": {
+          "processing_date": "{{tasks.ingest_bronze.start_time | date: '%Y-%m-%d'}}"
+        }
+      },
+      "timeout_seconds": 3600,
+      "max_retries": 1
+    },
+    {
+      "task_key": "silver_to_gold",
+      "description": "Aggregate Silver into consumption-ready Gold tables",
+      "depends_on": [{ "task_key": "bronze_to_silver" }],
+      "job_cluster_key": "pipeline_cluster",
+      "notebook_task": {
+        "notebook_path": "/Workspace/Repos/<your-repo>/databricks_medallion/notebooks/03_silver_to_gold",
+        "base_parameters": {
+          "report_date": "{{tasks.ingest_bronze.start_time | date: '%Y-%m-%d'}}"
+        }
+      },
+      "timeout_seconds": 3600,
+      "max_retries": 1
+    },
+    {
+      "task_key": "validate",
+      "description": "End-to-end data quality validation",
+      "depends_on": [{ "task_key": "silver_to_gold" }],
+      "job_cluster_key": "pipeline_cluster",
+      "notebook_task": {
+        "notebook_path": "/Workspace/Repos/<your-repo>/databricks_medallion/notebooks/04_validate_pipeline",
+        "base_parameters": {
+          "report_date": "{{tasks.ingest_bronze.start_time | date: '%Y-%m-%d'}}"
+        }
+      },
+      "timeout_seconds": 1800,
+      "max_retries": 0
+    },
+    {
+      "task_key": "iceberg_maintenance",
+      "description": "Expire snapshots, remove orphans, compact files",
+      "depends_on": [{ "task_key": "validate" }],
+      "job_cluster_key": "pipeline_cluster",
+      "spark_python_task": {
+        "python_file": "/Workspace/Repos/<your-repo>/databricks_medallion/src/utils/iceberg_utils.py"
+      },
+      "timeout_seconds": 3600,
+      "max_retries": 0
+    }
+  ],
+  "email_notifications": {
+    "on_failure": ["data-platform-alerts@yourcompany.com"],
+    "no_alert_for_skipped_runs": true
+  },
+  "max_concurrent_runs": 1
+}
