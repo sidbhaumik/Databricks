@@ -29,10 +29,3 @@ This repository includes a reusable Databricks medallion pipeline scaffold and n
 - Default raw/checkpoint paths use `dbfs:/FileStore/datalake`, which is generally available in Community Edition.
 - Validation and time-travel examples use `DESCRIBE HISTORY` and `versionAsOf` semantics for Delta tables.
 
-## Why This Is Portfolio-Ready
-
-The mental health project guide focuses on:
-- business framing and measurable impact,
-- end-to-end data + ML architecture,
-- production controls (quality, governance, CI/CD, monitoring),
-- and interview-ready storytelling.
