@@ -92,6 +92,6 @@ spark.sql(f"""
 """).show()
 
 # COMMAND ----------
-# DBTITLE 1,Iceberg snapshot history (Bronze orders)
+# DBTITLE 1,Delta Lake snapshot history (Bronze orders)
 
-spark.sql(f"SELECT * FROM {ORDERS_BRONZE_TABLE}.snapshots ORDER BY committed_at DESC").show(5)
+spark.sql(f"SELECT * FROM {ORDERS_BRONZE_TABLE}").show(5)

@@ -7,7 +7,7 @@ Run after notebooks 01–03 to verify:
   - Row counts propagate correctly across layers
   - No business key nulls in Silver/Gold
   - DQ pass rates are above threshold
-  - Iceberg metadata is healthy
+  - Delta Lake metadata is healthy
 """
 
 # COMMAND ----------
@@ -93,7 +93,7 @@ check("Silver has no null order_ids", silver_null_keys == 0, f"({silver_null_key
 
 # DQ pass rate
 dq_pass_rate = spark.sql(f"""
-    SELECT AVG(dq_passed::double) AS rate FROM {ORDERS_SILVER_TABLE}
+    SELECT AVG(CAST(dq_passed AS DOUBLE)) AS rate FROM {ORDERS_SILVER_TABLE}
     WHERE order_date = '{report_date}'
 """).first().rate or 0.0
 
@@ -159,19 +159,17 @@ product_count = spark.sql(f"""
 check("Product daily perf populated", product_count > 0, f"({product_count:,} rows)")
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 4. Iceberg health
+# 4. Delta Lake health
 # ──────────────────────────────────────────────────────────────────────────────
 
 print(f"\n{'─'*60}")
-print("ICEBERG TABLE HEALTH")
+print("DELTA TABLE HEALTH")
 print(f"{'─'*60}")
 
 for tbl in [ORDERS_BRONZE_TABLE, ORDERS_SILVER_TABLE, ORDERS_GOLD_TABLE]:
-    snapshot_count = spark.sql(
-        f"SELECT COUNT(*) AS n FROM {tbl}.snapshots"
-    ).first().n
-    check(f"Snapshots exist: {tbl.split('.')[-1]}", snapshot_count > 0,
-          f"({snapshot_count} snapshots)")
+    snapshot_count = spark.sql(f"DESCRIBE HISTORY {tbl}").count()
+    check(f"History versions exist: {tbl.split('.')[-1]}", snapshot_count > 0,
+          f"({snapshot_count} versions)")
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Summary

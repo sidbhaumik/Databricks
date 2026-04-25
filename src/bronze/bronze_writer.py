@@ -3,17 +3,15 @@
 Bronze layer writer.
 
 Bronze = raw ingestion, append-only, no transformations.
-Goal: get data into Iceberg as quickly as possible, preserving everything.
+Goal: get data into Delta Lake as quickly as possible, preserving everything.
 
-Writes to an Iceberg table partitioned by ingestion_date so that:
+Writes to an Delta Lake table partitioned by ingestion_date so that:
   - time-travel queries are efficient
   - old partitions can be expired independently
   - Silver can process incremental slices via partition filters
 """
 
 from pyspark.sql import SparkSession, DataFrame
-from pyspark.sql import functions as F
-from typing import Optional
 from src.utils.logger import PipelineLogger
 
 log = PipelineLogger("bronze_writer")
@@ -53,19 +51,17 @@ CUSTOMERS_BRONZE_DDL = """
 
 
 def create_bronze_tables(spark: SparkSession, catalog: str = "spark_catalog") -> None:
-    """Create Bronze Iceberg databases and tables (idempotent)."""
+    """Create Bronze Delta Lake databases and tables (idempotent)."""
     spark.sql(f"CREATE DATABASE IF NOT EXISTS {catalog}.bronze")
 
     spark.sql(f"""
         CREATE TABLE IF NOT EXISTS {catalog}.bronze.orders_raw (
             {ORDERS_BRONZE_DDL}
         )
-        USING iceberg
-        PARTITIONED BY (days(ingestion_date))
+        USING delta
+        PARTITIONED BY (ingestion_date)
         TBLPROPERTIES (
-            'format-version'                  = '2',
-            'write.parquet.compression-codec' = 'zstd',
-            'write.target-file-size-bytes'    = '134217728'
+            'delta.autoOptimize.optimizeWrite' = 'true'
         )
     """)
 
@@ -73,12 +69,10 @@ def create_bronze_tables(spark: SparkSession, catalog: str = "spark_catalog") ->
         CREATE TABLE IF NOT EXISTS {catalog}.bronze.customers_raw (
             {CUSTOMERS_BRONZE_DDL}
         )
-        USING iceberg
-        PARTITIONED BY (days(ingestion_date))
+        USING delta
+        PARTITIONED BY (ingestion_date)
         TBLPROPERTIES (
-            'format-version'                  = '2',
-            'write.parquet.compression-codec' = 'zstd',
-            'write.target-file-size-bytes'    = '134217728'
+            'delta.autoOptimize.optimizeWrite' = 'true'
         )
     """)
     log.info("Bronze tables ready", catalog=catalog)
@@ -94,7 +88,7 @@ def write_bronze_batch(
     mode: str = "append",
 ) -> None:
     """
-    Write a batch DataFrame to a Bronze Iceberg table.
+    Write a batch DataFrame to a Bronze Delta Lake table.
 
     mode="append"    — standard incremental load (default)
     mode="overwrite" — full reload for a given partition (use with care)
@@ -102,9 +96,8 @@ def write_bronze_batch(
     row_count = df.count()
     (
         df.write
-        .format("iceberg")
+        .format("delta")
         .mode(mode)
-        .option("write.distribution-mode", "hash")  # hash-distribute by partition
         .saveAsTable(table_name)
     )
     log.info("Bronze batch write complete", table=table_name, rows=row_count, mode=mode)
@@ -122,10 +115,10 @@ def write_bronze_stream(
     output_mode: str = "append",
 ) -> "StreamingQuery":
     """
-    Write a streaming DataFrame to a Bronze Iceberg table using foreachBatch.
+    Write a streaming DataFrame to a Bronze Delta Lake table using foreachBatch.
 
     foreachBatch gives us:
-      - Exactly-once semantics via Iceberg's ACID guarantees + checkpoint
+      - Exactly-once semantics via Delta Lake's ACID guarantees + checkpoint
       - Ability to count rows per micro-batch for monitoring
       - Easy retry logic without downstream duplication
     """
@@ -138,9 +131,8 @@ def write_bronze_stream(
         count = batch_df.count()
         (
             batch_df.write
-            .format("iceberg")
+            .format("delta")
             .mode("append")
-            .option("write.distribution-mode", "hash")
             .saveAsTable(table_name)
         )
         log.info("Bronze stream batch written",

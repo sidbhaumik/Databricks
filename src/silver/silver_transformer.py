@@ -9,7 +9,7 @@ Key patterns
 1. Read incremental Bronze data for a given processing date.
 2. Apply business rules (null handling, type casts, standardisation).
 3. Deduplicate within the batch using a row_number window.
-4. Upsert to Silver via Iceberg MERGE INTO — Silver is NOT append-only.
+4. Upsert to Silver via Delta Lake MERGE INTO — Silver is NOT append-only.
    Existing rows are updated; new rows are inserted.
 """
 
@@ -46,13 +46,10 @@ def create_silver_tables(spark: SparkSession, catalog: str = "spark_catalog") ->
             -- DQ flags
             dq_passed       BOOLEAN
         )
-        USING iceberg
-        PARTITIONED BY (months(order_date))
+        USING delta
+        PARTITIONED BY (order_date)
         TBLPROPERTIES (
-            'format-version'                  = '2',
-            'write.parquet.compression-codec' = 'zstd',
-            'read.parquet.vectorization.enabled' = 'true',
-            'write.merge.mode'                = 'merge-on-read'
+            'delta.autoOptimize.optimizeWrite' = 'true'
         )
     """)
 
@@ -67,11 +64,9 @@ def create_silver_tables(spark: SparkSession, catalog: str = "spark_catalog") ->
             signup_date     DATE,
             _silver_ts      TIMESTAMP
         )
-        USING iceberg
+        USING delta
         TBLPROPERTIES (
-            'format-version'                  = '2',
-            'write.parquet.compression-codec' = 'zstd',
-            'write.merge.mode'                = 'merge-on-read'
+            'delta.autoOptimize.optimizeWrite' = 'true'
         )
     """)
     log.info("Silver tables ready", catalog=catalog)
@@ -196,16 +191,16 @@ def upsert_to_silver(
     temp_view_name: str = "_silver_source",
 ) -> None:
     """
-    Upsert source_df into an Iceberg Silver table using MERGE INTO.
+    Upsert source_df into an Delta Lake Silver table using MERGE INTO.
 
-    Iceberg MERGE INTO (v2) supports:
+    Delta Lake MERGE INTO (v2) supports:
       - UPDATE existing rows when the merge key matches
       - INSERT new rows when no match is found
       - DELETE (not used here — soft deletes are preferred for Silver)
 
     The source DataFrame is registered as a temp view so we can reference it
     in SQL. Spark's query planner handles the join efficiently via
-    Iceberg's partition pruning.
+    Delta Lake's partition pruning.
     """
     source_df.createOrReplaceTempView(temp_view_name)
 
@@ -215,7 +210,6 @@ def upsert_to_silver(
     )
 
     # Build UPDATE SET clause — update all non-key columns
-    sample_row = source_df.limit(1)
     all_cols = source_df.columns
     update_cols = [c for c in all_cols if c not in merge_keys]
     update_set = ", ".join(f"target.{c} = source.{c}" for c in update_cols)
