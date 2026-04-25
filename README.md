@@ -22,3 +22,17 @@ This repository includes a reusable Databricks medallion pipeline scaffold and n
 1. Run `notebooks/00_setup.py`.
 2. Execute notebooks `01` through `04` in sequence.
 3. Follow `docs/mental_health_portfolio_project.md` to adapt the scaffold into the mental-health domain.
+
+## Databricks Community Edition Notes
+
+- This project is now configured to run on **Delta Lake** (no Iceberg runtime dependency).
+- Default raw/checkpoint paths use `dbfs:/FileStore/datalake`, which is generally available in Community Edition.
+- Validation and time-travel examples use `DESCRIBE HISTORY` and `versionAsOf` semantics for Delta tables.
+
+## Why This Is Portfolio-Ready
+
+The mental health project guide focuses on:
+- business framing and measurable impact,
+- end-to-end data + ML architecture,
+- production controls (quality, governance, CI/CD, monitoring),
+- and interview-ready storytelling.

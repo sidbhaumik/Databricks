@@ -5,9 +5,8 @@ Unit tests for each medallion layer.
 Run locally with:
     pytest tests/ -v
 
-Requires a local Spark installation (or the pyspark pip package) with
-the Iceberg runtime on the classpath. For CI, use the docker image:
-    apache/iceberg-spark-runtime-3.5_2.12:<version>
+Requires a local Spark installation (or the pyspark pip package).
+No Iceberg runtime is required; tests are Delta/vanilla Spark compatible.
 """
 
 import pytest
@@ -26,11 +25,6 @@ def spark():
         SparkSession.builder
         .master("local[2]")
         .appName("MedallionTests")
-        .config("spark.sql.extensions",
-                "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions")
-        .config("spark.sql.catalog.spark_catalog",
-                "org.apache.iceberg.spark.SparkSessionCatalog")
-        .config("spark.sql.catalog.spark_catalog.type", "in-memory")
         .config("spark.sql.shuffle.partitions", "2")
         .getOrCreate()
     )

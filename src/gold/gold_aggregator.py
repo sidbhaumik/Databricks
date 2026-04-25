@@ -44,12 +44,10 @@ def create_gold_tables(spark: SparkSession, catalog: str = "spark_catalog") -> N
             top_product_id      STRING        COMMENT 'Most ordered product on this day',
             dq_pass_rate        DOUBLE        COMMENT '% of orders passing DQ checks'
         )
-        USING iceberg
-        PARTITIONED BY (days(report_date))
+        USING delta
+        PARTITIONED BY (report_date)
         TBLPROPERTIES (
-            'format-version'                  = '2',
-            'write.parquet.compression-codec' = 'zstd',
-            'write.distribution-mode'         = 'hash'
+            'delta.autoOptimize.optimizeWrite' = 'true'
         )
     """)
 
@@ -68,11 +66,9 @@ def create_gold_tables(spark: SparkSession, catalog: str = "spark_catalog") -> N
             customer_segment    STRING        COMMENT 'BRONZE / SILVER / GOLD / PLATINUM',
             last_updated_ts     TIMESTAMP
         )
-        USING iceberg
+        USING delta
         TBLPROPERTIES (
-            'format-version'                  = '2',
-            'write.parquet.compression-codec' = 'zstd',
-            'write.merge.mode'                = 'merge-on-read'
+            'delta.autoOptimize.optimizeWrite' = 'true'
         )
     """)
 
@@ -87,11 +83,10 @@ def create_gold_tables(spark: SparkSession, catalog: str = "spark_catalog") -> N
             avg_unit_price      DECIMAL(18,4),
             revenue_rank        INT           COMMENT 'Rank by revenue within the day'
         )
-        USING iceberg
-        PARTITIONED BY (days(report_date))
+        USING delta
+        PARTITIONED BY (report_date)
         TBLPROPERTIES (
-            'format-version'                  = '2',
-            'write.parquet.compression-codec' = 'zstd'
+            'delta.autoOptimize.optimizeWrite' = 'true'
         )
     """)
     log.info("Gold tables ready", catalog=catalog)
@@ -274,7 +269,7 @@ def write_gold_partition(
     partition_val: str,
 ) -> None:
     """
-    Overwrite a single date partition in a Gold Iceberg table.
+    Overwrite a single date partition in a Gold Delta Lake table.
 
     Dynamic overwrite mode replaces only the matching partition — other
     partitions are untouched. This is safe for idempotent daily runs.
@@ -282,7 +277,7 @@ def write_gold_partition(
     count = df.count()
     (
         df.write
-        .format("iceberg")
+        .format("delta")
         .mode("overwrite")
         .option("partitionOverwriteMode", "dynamic")
         .saveAsTable(table_name)
@@ -319,7 +314,7 @@ def optimize_gold_table(
     zorder_cols: Optional[List[str]] = None,
 ) -> None:
     """
-    Run Iceberg's rewrite_data_files with sort strategy for optimal read perf.
+    Run Delta Lake's rewrite_data_files with sort strategy for optimal read perf.
     On Databricks you can also run OPTIMIZE … ZORDER BY directly.
     """
     if zorder_cols:

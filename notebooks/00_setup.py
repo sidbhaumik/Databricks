@@ -4,7 +4,7 @@
 Run this notebook once to:
   1. Create catalog databases (bronze / silver / gold)
   2. Generate sample Avro and Parquet source files on DBFS
-  3. Verify Iceberg is correctly configured
+  3. Verify Delta Lake is correctly configured
 """
 
 # COMMAND ----------
@@ -61,7 +61,7 @@ customers = [
 ]
 
 customers_df = spark.createDataFrame(customers)
-output_path = "dbfs:/mnt/datalake/raw/parquet/customers/"
+output_path = "dbfs:/FileStore/datalake/raw/parquet/customers/"
 customers_df.write.mode("overwrite").parquet(output_path)
 print(f"✓ {CUSTOMER_COUNT} customers written to {output_path}")
 
@@ -89,7 +89,7 @@ for day_offset in range(7):   # 7 days of history
         })
 
 orders_df = spark.createDataFrame(orders)
-avro_path = "dbfs:/mnt/datalake/raw/avro/orders/"
+avro_path = "dbfs:/FileStore/datalake/raw/avro/orders/"
 (
     orders_df.write.format("avro")
     .mode("overwrite")
@@ -98,7 +98,7 @@ avro_path = "dbfs:/mnt/datalake/raw/avro/orders/"
 print(f"✓ {len(orders)} orders written to {avro_path}")
 
 # COMMAND ----------
-# DBTITLE 1,Verify Iceberg
+# DBTITLE 1,Verify Delta Lake
 
 spark.sql("SHOW DATABASES IN spark_catalog").show()
 spark.sql("SHOW TABLES IN spark_catalog.bronze").show()
@@ -106,6 +106,6 @@ spark.sql("SHOW TABLES IN spark_catalog.silver").show()
 spark.sql("SHOW TABLES IN spark_catalog.gold").show()
 
 # COMMAND ----------
-# DBTITLE 1,Verify Iceberg table properties
+# DBTITLE 1,Verify Delta Lake table properties
 
 spark.sql("DESCRIBE EXTENDED spark_catalog.bronze.orders_raw").show(50, truncate=False)

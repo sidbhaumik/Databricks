@@ -76,16 +76,16 @@ spark.sql(f"""
 """).show()
 
 # COMMAND ----------
-# DBTITLE 1,Iceberg time travel — compare today's Silver to snapshot before merge
+# DBTITLE 1,Delta Lake time travel — compare today's Silver to previous version
 
 snapshots = spark.sql(
-    f"SELECT snapshot_id, committed_at FROM {ORDERS_SILVER_TABLE}.snapshots ORDER BY committed_at DESC"
+    f"DESCRIBE HISTORY {ORDERS_SILVER_TABLE}"
 ).collect()
 
 if len(snapshots) >= 2:
-    before_snapshot = snapshots[1].snapshot_id
-    print(f"Rows before today's merge (snapshot {before_snapshot}):")
-    spark.read.option("snapshot-id", before_snapshot).table(ORDERS_SILVER_TABLE).count()
+    before_version = snapshots[1].version
+    print(f"Rows before today's merge (version {before_version}):")
+    spark.read.option("versionAsOf", before_version).table(ORDERS_SILVER_TABLE).count()
 
 # COMMAND ----------
 # DBTITLE 1,Schema evolution demo — add a new column to Silver orders

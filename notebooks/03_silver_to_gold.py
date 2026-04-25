@@ -75,6 +75,6 @@ spark.sql(f"""
 """).show()
 
 # COMMAND ----------
-# DBTITLE 1,Iceberg metadata — Gold files
+# DBTITLE 1,Delta Lake metadata — Gold table history
 
-spark.sql(f"SELECT * FROM {ORDERS_GOLD_TABLE}.files LIMIT 10").show(truncate=False)
+spark.sql(f"DESCRIBE HISTORY {ORDERS_GOLD_TABLE}").show(truncate=False)
